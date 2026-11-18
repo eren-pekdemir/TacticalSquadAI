@@ -1,0 +1,13 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "Squad AI",
+	"Description": "Game-agnostic tactical squad AI: perception memory, utility decision making, procedural cover, flanking, suppression, morale and squad coordination.",
+	"Category": "AI",
+	"CreatedBy": "",
+	"CanContainContent": false,
+	"Modules": [
+		{ "Name": "SquadAI", "Type": "Runtime", "LoadingPhase": "Default" }
+	]
+}

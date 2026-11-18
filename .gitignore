@@ -1,0 +1,34 @@
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+.vs/
+.idea/
+*.sln
+*.VC.db
+*.opensdf
+*.sdf
+*.suo
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# Third-party packs: not redistributed (the code runs without them)
+Content/FreeWeaponSFX/
+Content/Effects/
+
+# Editor automation bridge (third-party, local tooling only)
+Plugins/EngineWire/
+.mcp.json
+
+# Showcase dressing (Fab / third-party packs) and the map built from them
+Content/Construction_VOL1/
+Content/Promenta/
+Content/Showcase/
+Content/Maps/Lvl_TacticalYard*
+Content/Adventures_Pack/
+
+# Per-user editor folders
+Content/Developers/
+Content/Collections/
+*.code-workspace
