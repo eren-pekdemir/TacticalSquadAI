@@ -389,6 +389,18 @@ bool ASquadAIController::AcquireCover(ESquadCoverIntent Intent, const FVector& T
 	Query.PreferredRangeMin = RangeMin;
 	Query.PreferredRangeMax = RangeMax;
 	Query.ExcludeIndex = bExcludeCurrent ? CoverIndex : INDEX_NONE;
+	const double Now = GetWorld()->GetTimeSeconds();
+	for (auto It = UnreachableCovers.CreateIterator(); It; ++It)
+	{
+		if (It.Value() < Now)
+		{
+			It.RemoveCurrent();
+		}
+		else
+		{
+			Query.ExcludeIndices.Add(It.Key());
+		}
+	}
 
 	if (const USquadSubsystem* Squad = GetSquadSubsystem())
 	{
@@ -515,6 +527,44 @@ void ASquadAIController::UpdateThreatWatch()
 
 FVector ASquadAIController::GetWatchPoint(const FVector& ThreatLocation) const
 {
+	const FVector Point = GetCornerOrThreatPoint(ThreatLocation);
+	const APawn* Self = GetPawn();
+	const ISquadCombatant* Combatant = GetCombatant();
+	if (!Self || !Combatant)
+	{
+		return Point;
+	}
+
+	// Kneeling behind a low wall the soldier is meant to face it, ready to pop up over it.
+	const FSquadCoverPoint* Cover = GetCurrentCover();
+	if (Cover && !Cover->bFullHeight && HasReached(Cover->Location, SquadController::CoverPostureRadius))
+	{
+		return Point;
+	}
+
+	// Never stand nose to a wall: if something solid is right in front of the eyes, look along it instead,
+	// towards the threat's side.
+	constexpr float WallTooClose = 150.f;
+	constexpr float AlongWallLook = 400.f;
+	const FVector Eye = Combatant->GetCombatantEyeLocation();
+	const FVector Ahead = Eye + (Point - Eye).GetSafeNormal() * WallTooClose;
+	FHitResult Hit;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadWatchWall), false, Self);
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, Eye, Ahead, ECC_Visibility, Params) || Cast<ISquadCombatant>(Hit.GetActor()))
+	{
+		return Point;
+	}
+
+	FVector Along = FVector::CrossProduct(FVector::UpVector, Hit.ImpactNormal).GetSafeNormal2D();
+	if (FVector::DotProduct(Along, ThreatLocation - Self->GetActorLocation()) < 0.f)
+	{
+		Along = -Along;
+	}
+	return Eye + Along * AlongWallLook;
+}
+
+FVector ASquadAIController::GetCornerOrThreatPoint(const FVector& ThreatLocation) const
+{
 	const FVector Chest(0.f, 0.f, SquadController::AimChestOffset);
 	const FSquadCoverPoint* Cover = GetCurrentCover();
 	const APawn* Self = GetPawn();
@@ -543,6 +593,18 @@ FVector ASquadAIController::GetWatchPoint(const FVector& ThreatLocation) const
 
 	const FVector Along = (Corner - Cover->Location).GetSafeNormal2D();
 	return Corner + Along * CornerLookDistance + Chest + FVector(0.f, 0.f, Self->GetActorLocation().Z - Corner.Z);
+}
+
+void ASquadAIController::MarkCoverUnreachable()
+{
+	constexpr double ForgetAfter = 15.0;
+	if (CoverIndex != INDEX_NONE)
+	{
+		UnreachableCovers.Add(CoverIndex, GetWorld()->GetTimeSeconds() + ForgetAfter);
+		UE_LOG(LogSquadAI, Verbose, TEXT("%s: cover %d unreachable, skipping it for %.0f s"), *GetNameSafe(GetPawn()), CoverIndex, ForgetAfter);
+	}
+	StopMoving();
+	ReleaseCover();
 }
 
 void ASquadAIController::SetExposed(bool bInExposed, float Lean)

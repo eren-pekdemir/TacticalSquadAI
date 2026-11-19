@@ -66,6 +66,9 @@ public:
 	/** Finds, claims and remembers the best cover for the intent. Returns false if none. */
 	bool AcquireCover(ESquadCoverIntent Intent, const FVector& ThreatLocation, float RangeMin, float RangeMax, float SearchRadius = 2200.f, bool bExcludeCurrent = false);
 	void ReleaseCover();
+
+	/** The claimed cover could not be reached (blocked path, wall in the way): avoid it for a while. */
+	void MarkCoverUnreachable();
 	int32 GetCoverIndex() const { return CoverIndex; }
 	const FSquadCoverPoint* GetCurrentCover() const;
 
@@ -74,6 +77,9 @@ public:
 	 *  around (holding the angle), never the wall itself; anywhere else, the threat.
 	 */
 	FVector GetWatchPoint(const FVector& ThreatLocation) const;
+
+	/** The corner to hold behind tall cover, else the threat; GetWatchPoint adds the wall check on top. */
+	FVector GetCornerOrThreatPoint(const FVector& ThreatLocation) const;
 
 	/** Standing at the claimed cover and it still hides the agent from ThreatLocation. */
 	bool IsInCoverFrom(const FVector& ThreatLocation) const;
@@ -193,6 +199,8 @@ private:
 	bool bAiming = false;
 	bool bWatching = false;
 	bool bExposed = false;
+	/** Cover index -> world time until which it is skipped. */
+	TMap<int32, double> UnreachableCovers;
 	double LastAimTime = -100.0;
 	bool bCrouched = false;
 	float ExposedLean = 0.f;

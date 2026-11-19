@@ -192,7 +192,10 @@ void UTSAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const FRotator ActorRotation = Character->GetActorRotation();
 
 	Speed = Velocity.Size2D();
-	if (Speed > TSAnim::IdleThreshold)
+	// Below walking pace the velocity direction is mostly noise (scraping along a wall, stopping), so the
+	// blend keeps the last real direction instead of flicking to a side-step.
+	constexpr float DirectionMinSpeed = 50.f;
+	if (Speed > DirectionMinSpeed)
 	{
 		// Swing the blend direction along the shortest arc instead of snapping between clips.
 		const float Target = FRotator::NormalizeAxis(Velocity.Rotation().Yaw - ActorRotation.Yaw);
@@ -812,6 +815,22 @@ void FTSAnimInstanceProxy::ApplyAimOffset(FPoseContext& Output)
 	FPoseContext Additive(this, true);
 	FAnimationPoseData AdditiveData(Additive);
 	AimOffset->GetAnimationPose(SampleData, FAnimExtractContext(0.0), AdditiveData);
+
+	// The aim offset is for the torso. Its samples also carry a hip/leg twist, which would turn the legs
+	// away from the direction of travel; keep everything below spine_01 out of it.
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	const FCompactPoseBoneIndex UpperRoot = TSAnim::FindBone(Bones, TSAnim::UpperBodyRoot);
+	if (UpperRoot != INDEX_NONE)
+	{
+		for (const FCompactPoseBoneIndex BoneIndex : Additive.Pose.ForEachBoneIndex())
+		{
+			if (!TSAnim::IsUnder(Bones, BoneIndex, UpperRoot))
+			{
+				// Additive identity: no rotation, no translation and *zero* scale delta.
+				Additive.Pose[BoneIndex] = FTransform(FQuat::Identity, FVector::ZeroVector, FVector::ZeroVector);
+			}
+		}
+	}
 
 	FAnimationPoseData BaseData(Output);
 	FAnimationRuntime::AccumulateMeshSpaceRotationAdditiveToLocalPose(BaseData, AdditiveData, 1.f);

@@ -328,7 +328,7 @@ int32 USquadCoverSubsystem::FindBestCover(const FSquadCoverQuery& Query, TArray<
 	{
 		const FSquadCoverPoint& Cover = Covers[Index];
 
-		if (Index == Query.ExcludeIndex)
+		if (Index == Query.ExcludeIndex || Query.ExcludeIndices.Contains(Index))
 		{
 			continue;
 		}

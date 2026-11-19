@@ -74,6 +74,8 @@ private:
 	FVector Destination = FVector::ZeroVector;
 	float Elapsed = 0.f;
 	bool bHasDestination = false;
+	/** How long the agent has been standing still while it should be moving to the cover. */
+	float StuckTime = 0.f;
 };
 
 /** Exposed: get to the best protected spot that still allows shooting back. */

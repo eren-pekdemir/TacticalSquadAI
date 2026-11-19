@@ -31,6 +31,9 @@ struct SQUADAI_API FSquadCoverQuery
 	TArray<FVector> AllyLocations;
 	/** Cover to skip, e.g. the one the agent is leaving because it has no angle on the target. */
 	int32 ExcludeIndex = INDEX_NONE;
+
+	/** Covers this agent recently failed to reach. */
+	TArray<int32> ExcludeIndices;
 };
 
 struct SQUADAI_API FSquadCoverCandidate

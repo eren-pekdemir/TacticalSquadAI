@@ -153,6 +153,7 @@ void USquadAction_MoveToCover::Enter(const FSquadContext& Context)
 
 	Destination = Context.Controller->GetCurrentCover()->Location;
 	bHasDestination = true;
+	StuckTime = 0.f;
 
 	if (bBarkOnEnter)
 	{
@@ -175,6 +176,21 @@ ESquadActionStatus USquadAction_MoveToCover::Tick(const FSquadContext& Context, 
 		Controller->StopMoving();
 		OnArrived(Context);
 		return ESquadActionStatus::Succeeded;
+	}
+
+	// Standing still while trying to get there (pressed against a wall, path blocked or ending short):
+	// give up on this cover right away instead of staring at the wall until the timeout. Speed, not distance,
+	// is the test, because paths around walls often lead away from the cover for a while.
+	constexpr float StuckSpeed = 30.f;
+	constexpr float StuckLimit = 1.f;
+	if (Context.Pawn->GetVelocity().Size2D() > StuckSpeed)
+	{
+		StuckTime = 0.f;
+	}
+	else if ((StuckTime += DeltaTime) > StuckLimit)
+	{
+		Controller->MarkCoverUnreachable();
+		return ESquadActionStatus::Failed;
 	}
 
 	if (Elapsed > Timeout)
