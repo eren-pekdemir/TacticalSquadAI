@@ -53,4 +53,10 @@ public:
 
 	/** 0..1 personality trait. Brave agents hold out longer before falling back. */
 	virtual float GetCombatantBravery() const { return 0.75f; }
+
+	/** Kneel (behind low cover, when pinned down) or stand. Optional for the game to support. */
+	virtual void SetCombatantCrouched(bool bCrouch) {}
+
+	/** Lean around a corner to shoot: -1 left, +1 right, 0 upright. Optional for the game to support. */
+	virtual void SetCombatantLean(float Lean) {}
 };

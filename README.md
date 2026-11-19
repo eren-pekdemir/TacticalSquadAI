@@ -20,6 +20,8 @@ third-person shooter that hosts it. Press **F1** in game to see every decision a
 | **Fair aim** | First shots miss on purpose, so you can react | Spread settles over ~2 s of continuous sight, widens with target speed, own movement and suppression. |
 | **Sound** | Sprinting gives you away, reloading invites a rush | Footsteps and reloads are hearing stimuli. Hearing a reload marks the target vulnerable: the squad yells "He's reloading, push!" and advances. |
 | **Learning your habits** | They search the places you like to hide | The director keeps a heatmap of where players spend time and seeds search routes with it. |
+| **Body language** | They kneel behind low walls, pop up to shoot, lean out of tall cover and flinch down when pinned | The controller picks a posture each frame: crouch at low cover, when reloading or suppressed behind tall cover, or when pinned in the open; stand to move or fire; lean towards the open side when peeking (`SetExposed`). |
+| **Human reaction time** | You get a beat to react when you round a corner | A target that just came into view is tracked for 0.25–0.6 s (rolled per soldier) before the first shot. |
 | **Barks** | You always know what they are doing | Context lines ("Flanking!", "Man down!", "Lost visual!") with squad-wide cooldowns. |
 
 ## Architecture
@@ -39,7 +41,8 @@ Plugins/SquadAI  (game-agnostic, Runtime module)
 Source/TacticalSquadAI  (demo game)
 ├── ATSCharacter / ATSPlayerCharacter / ATSEnemyCharacter
 ├── ATSWeapon                  hitscan rifle shared by player and AI
-├── UTSAnimInstance            fully native animation: 8-way locomotion, upper-body slot, aim offset
+├── UTSAnimInstance            fully native animation: stride-matched 8-way locomotion, turn-in-place steps,
+│                              crouch layer, torso/head look, cover lean, upper-body slot, aim offset
 └── ATSHUD                     crosshair, vitals and the "AI Insight" overlay
 ```
 
@@ -76,3 +79,14 @@ third-party art (a Fab construction pack and asphalt textures) that is not in th
 
 Mannequin characters and animations come from Epic's UE5 templates. Rifle sounds and tracer effects are
 taken from free packs and are not redistributed in this repository.
+
+Crouch legs come from the free **Free Animation Library** pack on Fab (UE5 mannequin skeleton). Add it to the
+project at `Content/FreeAnimationLibrary`; `Config/DefaultEngine.ini` redirects its skeleton to the project's
+mannequin. Without the pack everything still works and soldiers simply stay on their feet.
+
+### How the locomotion stays planted
+
+The rifle clips are in-place, so their speed is read from the feet: the planted foot's ground speed, the
+number of right-foot plants per loop and the phase of the first one. Every clip then plays on one shared,
+distance-driven stride counter, aligned on that plant, so neighbouring directions and walk/jog blend
+foot-for-foot instead of scissoring.

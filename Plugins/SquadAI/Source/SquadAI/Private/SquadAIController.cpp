@@ -25,6 +25,14 @@ namespace SquadController
 	constexpr float BarkLifetime = 3.5f;
 	constexpr int32 MaxRecentBarks = 3;
 	constexpr float AimChestOffset = 35.f;
+	/** Suppression above this makes an agent kneel wherever it stands still. */
+	constexpr float PinnedSuppression = 0.6f;
+	/** Behind tall cover, agents only kneel once suppression is at least this high. */
+	constexpr float CowerSuppression = 0.35f;
+	/** Distance from the cover point that still counts as "at cover" for posture. */
+	constexpr float CoverPostureRadius = 90.f;
+	/** Seconds the reason to crouch must persist before the agent actually goes down. */
+	constexpr float CrouchDelay = 0.25f;
 }
 
 ASquadAIController::ASquadAIController()
@@ -89,6 +97,11 @@ void ASquadAIController::OnPossess(APawn* InPawn)
 		UE_LOG(LogSquadAI, Warning, TEXT("%s possessed %s, which does not implement ISquadCombatant. The squad brain will stay idle."), *GetName(), *GetNameSafe(InPawn));
 	}
 
+	Reaction = FMath::FRandRange(ReactionTime.X, ReactionTime.Y);
+	bExposed = false;
+	bCrouched = false;
+	CrouchUrge = 0.f;
+
 	GetPerceptionComponent()->OnTargetPerceptionUpdated.AddUniqueDynamic(this, &ASquadAIController::HandlePerceptionUpdated);
 	GetPerceptionComponent()->RequestStimuliListenerUpdate();
 	InPawn->OnTakeAnyDamage.AddUniqueDynamic(this, &ASquadAIController::HandlePawnDamaged);
@@ -151,6 +164,7 @@ void ASquadAIController::Tick(float DeltaTime)
 	UpdateEmotions(DeltaTime);
 	UpdateThreatWatch();
 	UpdateMovementStyle();
+	UpdatePosture(DeltaTime);
 
 	SquadAIDebug::DrawAgent(*this);
 
@@ -461,6 +475,7 @@ void ASquadAIController::StopMoving()
 void ASquadAIController::AimAt(const FVector& Point)
 {
 	bAiming = true;
+	LastAimTime = GetWorld()->GetTimeSeconds();
 	SetFocalPoint(Point, EAIFocusPriority::Gameplay);
 }
 
@@ -474,6 +489,13 @@ void ASquadAIController::UpdateThreatWatch()
 {
 	// Sprinting agents look where they run; everyone else keeps the threat in view. Explicit aims
 	// (Gameplay priority) always win over this lower-priority watch focus.
+	// Aiming is requested every frame by the running action; a stale aim is dropped, not held forever.
+	constexpr double AimExpiry = 0.3;
+	if (bAiming && GetWorld()->GetTimeSeconds() - LastAimTime > AimExpiry)
+	{
+		ClearAim();
+	}
+
 	const FSquadTargetKnowledge* Threat = Knowledge->GetPrimaryTarget();
 	const bool bSprinting = bSprintRequested && IsMoving();
 	const bool bShouldWatch = !bAiming && !bSprinting && Threat && Threat->Confidence > 0.15f;
@@ -490,11 +512,52 @@ void ASquadAIController::UpdateThreatWatch()
 	}
 }
 
+void ASquadAIController::SetExposed(bool bInExposed, float Lean)
+{
+	bExposed = bInExposed;
+	ExposedLean = bInExposed ? FMath::Clamp(Lean, -1.f, 1.f) : 0.f;
+}
+
+void ASquadAIController::UpdatePosture(float DeltaTime)
+{
+	ISquadCombatant* Combatant = GetCombatant();
+	if (!Combatant)
+	{
+		return;
+	}
+
+	const FSquadCoverPoint* Cover = GetCurrentCover();
+	const bool bAtCover = Cover && !IsMoving() && HasReached(Cover->Location, SquadController::CoverPostureRadius);
+	const bool bLowCover = bAtCover && !Cover->bFullHeight;
+
+	// Reasons to get down: hiding behind something low, ducking fire behind tall cover, or pinned in the open.
+	bool bWantCrouch = false;
+	if (!bExposed && !IsMoving())
+	{
+		bWantCrouch = bLowCover
+			|| (bAtCover && (Suppression > SquadController::CowerSuppression || Combatant->IsCombatantReloading()))
+			|| Suppression > SquadController::PinnedSuppression;
+	}
+
+	// Standing up is immediate (to move or shoot); going down waits a beat so agents do not bob.
+	CrouchUrge = bWantCrouch ? CrouchUrge + DeltaTime : 0.f;
+	const bool bCrouch = bWantCrouch && CrouchUrge >= SquadController::CrouchDelay;
+	if (bCrouch != bCrouched)
+	{
+		bCrouched = bCrouch;
+		Combatant->SetCombatantCrouched(bCrouch);
+	}
+
+	Combatant->SetCombatantLean(bExposed ? ExposedLean : 0.f);
+}
+
 void ASquadAIController::UpdateMovementStyle()
 {
 	if (ISquadCombatant* Combatant = GetCombatant())
 	{
-		const bool bFacingFocus = bAiming || bWatching;
+		// Aiming squares the body up to the target. Merely watching a threat only does so standing
+		// still; on the move the body faces the path and the torso and head turn towards the threat.
+		const bool bFacingFocus = bAiming || (bWatching && !IsMoving());
 		Combatant->SetCombatantStrafing(bFacingFocus);
 		Combatant->SetCombatantSprinting(bSprintRequested && !bFacingFocus && IsMoving());
 	}
@@ -543,8 +606,11 @@ void ASquadAIController::FireAt(const FSquadTargetKnowledge& Target, bool bSuppr
 
 	AimAt(AimPoint);
 
+	// Reaction time: a target that just popped into view is tracked before the first shot is fired.
+	const bool bReacting = !bSuppressive && Target.bVisible && Target.VisibleDuration < Reaction;
+
 	// A professional never shoots through a team mate: hold fire until the lane is clear.
-	if (IsFriendlyInLineOfFire(AimPoint))
+	if (bReacting || IsFriendlyInLineOfFire(AimPoint))
 	{
 		Combatant->SetCombatantFiring(false, AimPoint, 0.f);
 		return;

@@ -87,6 +87,12 @@ public:
 	void FireAt(const FSquadTargetKnowledge& Target, bool bSuppressive);
 	void StopFiring();
 
+	/**
+	 *  Attack actions call this while they deliberately show themselves to shoot: the agent stands up
+	 *  from low cover, or leans out (Lean -1 left, +1 right) from the edge of tall cover.
+	 */
+	void SetExposed(bool bInExposed, float Lean = 0.f);
+
 	/** Inaccuracy in degrees: settles while the target stays visible, worsens under suppression. */
 	float ComputeSpread(const FSquadTargetKnowledge& Target, bool bSuppressive) const;
 
@@ -119,6 +125,9 @@ protected:
 	void UpdateVisibleTargets(float DeltaTime);
 	void UpdateEmotions(float DeltaTime);
 	void UpdateMovementStyle();
+
+	/** Crouch behind low cover or when pinned down, stand to move or shoot, lean when peeking. */
+	void UpdatePosture(float DeltaTime);
 
 	/** With no explicit aim, keep eyes on where the threat probably is (never stare at a wall). */
 	void UpdateThreatWatch();
@@ -158,6 +167,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Squad AI|Accuracy", meta = (Units = "deg"))
 	float SuppressedSpread = 6.f;
 
+	/** Human reaction time: how long a newly seen target must stay visible before the first shot. */
+	UPROPERTY(EditDefaultsOnly, Category = "Squad AI|Accuracy", meta = (Units = "s"))
+	FVector2D ReactionTime = FVector2D(0.25f, 0.6f);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Squad AI|Accuracy", meta = (Units = "deg"))
 	float SuppressiveFireSpread = 4.f;
 
@@ -173,6 +186,14 @@ private:
 	bool bDead = false;
 	bool bAiming = false;
 	bool bWatching = false;
+	bool bExposed = false;
+	double LastAimTime = -100.0;
+	bool bCrouched = false;
+	float ExposedLean = 0.f;
+	/** Rolled per agent from ReactionTime on possess. */
+	float Reaction = 0.4f;
+	/** Time spent pinned (or settled) before crouching; avoids bobbing up and down. */
+	float CrouchUrge = 0.f;
 	bool bSprintRequested = false;
 
 	TArray<FSquadBarkEvent> RecentBarks;

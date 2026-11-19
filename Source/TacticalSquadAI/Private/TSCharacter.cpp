@@ -18,6 +18,10 @@ namespace TSCharacterDefaults
 	constexpr float DeathImpulse = 450.f;
 	constexpr float CorpseLifeSpan = 45.f;
 	constexpr float EyeHeightOffset = 70.f;
+	/** Kneeling: the capsule shrinks to this and the eyes drop to roughly 1.1 m. */
+	constexpr float CrouchedHalfHeight = 64.f;
+	constexpr float CrouchedEyeHeightOffset = 45.f;
+	constexpr float CrouchedSpeed = 170.f;
 }
 
 ATSCharacter::ATSCharacter()
@@ -76,7 +80,9 @@ ATSCharacter::ATSCharacter()
 	Movement->BrakingDecelerationWalking = 1600.f;
 	Movement->GroundFriction = 6.f;
 	Movement->bUseSeparateBrakingFriction = false;
-	Movement->GetNavAgentPropertiesRef().bCanCrouch = false;
+	Movement->GetNavAgentPropertiesRef().bCanCrouch = true;
+	Movement->SetCrouchedHalfHeight(TSCharacterDefaults::CrouchedHalfHeight);
+	Movement->MaxWalkSpeedCrouched = TSCharacterDefaults::CrouchedSpeed;
 
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationPitch = false;
@@ -179,7 +185,25 @@ void ATSCharacter::Tick(float DeltaTime)
 
 FVector ATSCharacter::GetCombatantEyeLocation() const
 {
-	return GetActorLocation() + FVector(0.f, 0.f, TSCharacterDefaults::EyeHeightOffset);
+	const float Offset = bIsCrouched ? TSCharacterDefaults::CrouchedEyeHeightOffset : TSCharacterDefaults::EyeHeightOffset;
+	return GetActorLocation() + FVector(0.f, 0.f, Offset);
+}
+
+void ATSCharacter::SetCombatantCrouched(bool bCrouch)
+{
+	if (bDead)
+	{
+		return;
+	}
+
+	if (bCrouch)
+	{
+		Crouch();
+	}
+	else
+	{
+		UnCrouch();
+	}
 }
 
 // ---- Weapon -------------------------------------------------------------------------------------

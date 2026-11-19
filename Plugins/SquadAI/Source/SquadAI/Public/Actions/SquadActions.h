@@ -38,6 +38,8 @@ private:
 	TArray<FVector> Waypoints;
 	int32 WaypointIndex = 0;
 	float LookTimer = 0.f;
+	/** Heading the agent arrived with; the look-around sweep swings either side of it. */
+	float SweepYaw = 0.f;
 };
 
 /** Shared logic for every action that runs to a cover point. */
@@ -157,6 +159,8 @@ private:
 	FVector CoverLocation = FVector::ZeroVector;
 	float PhaseTime = 0.f;
 	float ShootTime = 0.f;
+	/** Side the agent leans to while exposed (-1 left, +1 right, 0 over low cover). */
+	float Lean = 0.f;
 	float BurstTimer = 0.f;
 	bool bBurstOn = false;
 };

@@ -110,9 +110,14 @@ ESquadActionStatus USquadAction_Search::Tick(const FSquadContext& Context, float
 	}
 
 	// At the waypoint (or the path ended): sweep the area before moving on.
+	if (LookTimer <= 0.f)
+	{
+		SweepYaw = Context.Pawn->GetActorRotation().Yaw;
+	}
 	LookTimer += DeltaTime;
 	const FVector Origin = Context.Pawn->GetActorLocation();
-	const FVector Sweep = FRotator(0.f, Context.Pawn->GetActorRotation().Yaw + FMath::Sin(LookTimer * 2.f) * 70.f, 0.f).Vector();
+	// Check one side, then the other, like a person clearing an area.
+	const FVector Sweep = FRotator(0.f, SweepYaw + FMath::Sin(LookTimer * 2.f) * 70.f, 0.f).Vector();
 	Controller->AimAt(Origin + Sweep * 500.f + FVector(0.f, 0.f, 60.f));
 
 	if (LookTimer > 1.6f)

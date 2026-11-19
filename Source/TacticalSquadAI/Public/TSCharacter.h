@@ -43,6 +43,8 @@ public:
 	virtual float GetCombatantEngagementRange() const override;
 	virtual int32 GetCombatantSquadId() const override { return SquadId; }
 	virtual float GetCombatantBravery() const override { return Bravery; }
+	virtual void SetCombatantCrouched(bool bCrouch) override;
+	virtual void SetCombatantLean(float InLean) override { Lean = FMath::Clamp(InLean, -1.f, 1.f); }
 
 	// ---- IGenericTeamAgentInterface ---------------------------------------------------------
 
@@ -64,6 +66,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Character")
 	bool IsStrafing() const { return bStrafing; }
+
+	/** Requested lean around cover, -1 left .. +1 right. The animation eases into it. */
+	float GetLean() const { return Lean; }
 
 	ATSWeapon* GetWeapon() const { return Weapon; }
 
@@ -164,6 +169,7 @@ protected:
 	bool bSprinting = false;
 	bool bStrafing = false;
 	bool bAiming = false;
+	float Lean = 0.f;
 	double LastDamageTime = -100.0;
 	FVector LastDamageSource = FVector::ZeroVector;
 

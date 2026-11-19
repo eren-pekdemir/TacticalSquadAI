@@ -74,6 +74,13 @@ void USquadAction_AttackFromCover::Enter(const FSquadContext& Context)
 		PeekLocation = CoverLocation;
 	}
 
+	// Stepping sideways out of tall cover: lean towards the open side. Over low cover: just stand up.
+	const FVector Step = (PeekLocation - CoverLocation).GetSafeNormal2D();
+	const FVector ToThreat = (Context.Target.LastKnownLocation - CoverLocation).GetSafeNormal2D();
+	const FVector ThreatRight = FVector::CrossProduct(FVector::UpVector, ToThreat);
+	Lean = Step.IsNearlyZero() ? 0.f : FMath::Sign(FVector::DotProduct(Step, ThreatRight));
+
+	Context.Controller->SetExposed(true, Lean);
 	Context.Controller->MoveToPoint(PeekLocation, false, 15.f);
 }
 
@@ -106,6 +113,7 @@ ESquadActionStatus USquadAction_AttackFromCover::Tick(const FSquadContext& Conte
 		if (PhaseTime > ShootTime || bLostTarget || bDuck || bEmpty)
 		{
 			Controller->StopFiring();
+			Controller->SetExposed(false);
 			Controller->MoveToPoint(CoverLocation, false, 15.f);
 			Phase = EPhase::Return;
 			PhaseTime = 0.f;
@@ -137,6 +145,7 @@ ESquadActionStatus USquadAction_AttackFromCover::Tick(const FSquadContext& Conte
 void USquadAction_AttackFromCover::Exit(const FSquadContext& Context, ESquadActionStatus Result)
 {
 	Context.Controller->StopFiring();
+	Context.Controller->SetExposed(false);
 	if (Context.Squad)
 	{
 		Context.Squad->ReleaseAttackToken(Context.Controller);
