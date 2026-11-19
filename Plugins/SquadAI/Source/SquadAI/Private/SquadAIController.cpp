@@ -498,11 +498,12 @@ void ASquadAIController::UpdateThreatWatch()
 
 	const FSquadTargetKnowledge* Threat = Knowledge->GetPrimaryTarget();
 	const bool bSprinting = bSprintRequested && IsMoving();
-	const bool bShouldWatch = !bAiming && !bSprinting && Threat && Threat->Confidence > 0.15f;
+	// Only while standing: a soldier on the move looks where he is going (a visible threat is aimed at instead).
+	const bool bShouldWatch = !bAiming && !bSprinting && !IsMoving() && Threat && Threat->Confidence > 0.15f;
 
 	if (bShouldWatch)
 	{
-		SetFocalPoint(Knowledge->PredictLocation(*Threat) + FVector(0.f, 0.f, SquadController::AimChestOffset), EAIFocusPriority::Default);
+		SetFocalPoint(GetWatchPoint(Knowledge->PredictLocation(*Threat)), EAIFocusPriority::Default);
 		bWatching = true;
 	}
 	else if (bWatching)
@@ -510,6 +511,38 @@ void ASquadAIController::UpdateThreatWatch()
 		ClearFocus(EAIFocusPriority::Default);
 		bWatching = false;
 	}
+}
+
+FVector ASquadAIController::GetWatchPoint(const FVector& ThreatLocation) const
+{
+	const FVector Chest(0.f, 0.f, SquadController::AimChestOffset);
+	const FSquadCoverPoint* Cover = GetCurrentCover();
+	const APawn* Self = GetPawn();
+	if (!Cover || !Self || !Cover->bFullHeight || !HasReached(Cover->Location, SquadController::CoverPostureRadius)
+		|| !GetCoverSubsystem()->IsCoverProtectedFrom(CoverIndex, ThreatLocation))
+	{
+		return ThreatLocation + Chest;
+	}
+
+	// Hold the corner: look past the peek spot nearest the threat, along the wall.
+	constexpr float CornerLookDistance = 400.f;
+	FVector Corner = FVector::ZeroVector;
+	if (Cover->bCanPeekLeft || Cover->bCanPeekRight)
+	{
+		const bool bLeft = Cover->bCanPeekLeft && (!Cover->bCanPeekRight
+			|| FVector::DistSquared(Cover->PeekLeftLocation, ThreatLocation) < FVector::DistSquared(Cover->PeekRightLocation, ThreatLocation));
+		Corner = bLeft ? Cover->PeekLeftLocation : Cover->PeekRightLocation;
+	}
+	else
+	{
+		// No edge to peek from: look along the wall, towards the threat's side.
+		const FVector Along = FVector::CrossProduct(FVector::UpVector, Cover->Normal).GetSafeNormal2D();
+		const float Side = FMath::Sign(FVector::DotProduct(ThreatLocation - Cover->Location, Along));
+		Corner = Cover->Location + Along * (Side == 0.f ? 1.f : Side) * 100.f;
+	}
+
+	const FVector Along = (Corner - Cover->Location).GetSafeNormal2D();
+	return Corner + Along * CornerLookDistance + Chest + FVector(0.f, 0.f, Self->GetActorLocation().Z - Corner.Z);
 }
 
 void ASquadAIController::SetExposed(bool bInExposed, float Lean)

@@ -1,5 +1,6 @@
 #include "Actions/SquadActions.h"
 
+#include "EngineUtils.h"
 #include "NavigationSystem.h"
 #include "SquadAIController.h"
 #include "SquadCombatant.h"
@@ -72,6 +73,18 @@ void USquadAction_AttackFromCover::Enter(const FSquadContext& Context)
 	{
 		// No angle from this cover: fire blind over/around it from where we stand.
 		PeekLocation = CoverLocation;
+	}
+
+	// Never step into a squad mate who is already standing on that spot.
+	constexpr float PersonalSpace = 80.f;
+	for (TActorIterator<APawn> It(Context.Controller->GetWorld()); It; ++It)
+	{
+		const APawn* Other = *It;
+		if (Other != Context.Pawn && Cast<ISquadCombatant>(Other) && FVector::Dist2D(Other->GetActorLocation(), PeekLocation) < PersonalSpace)
+		{
+			PeekLocation = CoverLocation;
+			break;
+		}
 	}
 
 	// Stepping sideways out of tall cover: lean towards the open side. Over low cover: just stand up.

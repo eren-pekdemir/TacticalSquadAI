@@ -27,10 +27,10 @@ void USquadAction_Idle::Enter(const FSquadContext& Context)
 
 ESquadActionStatus USquadAction_Idle::Tick(const FSquadContext& Context, float DeltaTime)
 {
-	// Alert but idle: keep watching where the threat was.
+	// Alert but idle: keep watching where the threat was (or hold the corner of the wall we hide behind).
 	if (Context.bHasTarget)
 	{
-		Context.Controller->AimAt(Context.Target.LastKnownLocation);
+		Context.Controller->AimAt(Context.Controller->GetWatchPoint(Context.Target.LastKnownLocation));
 	}
 	return ESquadActionStatus::Running;
 }
@@ -184,10 +184,13 @@ ESquadActionStatus USquadAction_MoveToCover::Tick(const FSquadContext& Context, 
 		return ESquadActionStatus::Failed;
 	}
 
-	// Run with the weapon lowered, or move tactically with the weapon up: on a visible target, or
-	// backing away from a threat that is close, instead of turning our back on it.
-	constexpr float CloseThreat = 1200.f;
-	const bool bAim = bAimWhileMoving && Context.bHasTarget && (Context.Target.bVisible || Context.DistanceToTarget < CloseThreat);
+	// Run facing the path with the weapon lowered. Only when the target is in sight and roughly ahead does
+	// the soldier advance with the weapon up; crabbing sideways or backwards across the map looks robotic.
+	constexpr float AimWhileMovingMaxAngle = 70.f;
+	const FVector PathDirection = (Destination - Context.Pawn->GetActorLocation()).GetSafeNormal2D();
+	const FVector TargetDirection = (Context.Target.LastKnownLocation - Context.Pawn->GetActorLocation()).GetSafeNormal2D();
+	const bool bTargetAhead = FVector::DotProduct(PathDirection, TargetDirection) >= FMath::Cos(FMath::DegreesToRadians(AimWhileMovingMaxAngle));
+	const bool bAim = bAimWhileMoving && Context.bHasTarget && Context.Target.bVisible && bTargetAhead;
 	if (bAim)
 	{
 		Controller->AimAt(Context.Target.LastKnownLocation);

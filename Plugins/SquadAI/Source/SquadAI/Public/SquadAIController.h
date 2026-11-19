@@ -69,6 +69,12 @@ public:
 	int32 GetCoverIndex() const { return CoverIndex; }
 	const FSquadCoverPoint* GetCurrentCover() const;
 
+	/**
+	 *  Where to look while waiting for a threat. Behind tall cover that is the corner the agent will peek
+	 *  around (holding the angle), never the wall itself; anywhere else, the threat.
+	 */
+	FVector GetWatchPoint(const FVector& ThreatLocation) const;
+
 	/** Standing at the claimed cover and it still hides the agent from ThreatLocation. */
 	bool IsInCoverFrom(const FVector& ThreatLocation) const;
 

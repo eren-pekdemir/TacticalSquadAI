@@ -27,6 +27,8 @@ namespace TSAnim
 	/** Total spine roll at full lean. */
 	constexpr float LeanDegrees = 24.f;
 	constexpr float LookYawLimit = 100.f;
+	/** With the weapon down only the head and neck turn, and not far: the body faces where it goes. */
+	constexpr float RelaxedLookYawLimit = 40.f;
 	constexpr float LookInterpSpeed = 8.f;
 	/** Body yaw speeds (deg/s) between which turn-in-place stepping fades in. */
 	constexpr float MinTurnRate = 25.f;
@@ -58,14 +60,14 @@ namespace TSAnim
 		float Lean;
 	};
 	const FTorsoBone TorsoChain[] = {
-		{ TEXT("spine_01"), 0.10f, 0.20f, 0.22f },
-		{ TEXT("spine_02"), 0.10f, 0.20f, 0.22f },
-		{ TEXT("spine_03"), 0.12f, 0.20f, 0.22f },
-		{ TEXT("spine_04"), 0.12f, 0.20f, 0.17f },
-		{ TEXT("spine_05"), 0.12f, 0.20f, 0.17f },
-		{ TEXT("neck_01"),  0.14f, 0.f,   0.f },
-		{ TEXT("neck_02"),  0.14f, 0.f,   0.f },
-		{ TEXT("head"),     0.16f, 0.f,   0.f },
+		{ TEXT("spine_01"), 0.f,   0.20f, 0.22f },
+		{ TEXT("spine_02"), 0.f,   0.20f, 0.22f },
+		{ TEXT("spine_03"), 0.05f, 0.20f, 0.22f },
+		{ TEXT("spine_04"), 0.05f, 0.20f, 0.17f },
+		{ TEXT("spine_05"), 0.10f, 0.20f, 0.17f },
+		{ TEXT("neck_01"),  0.25f, 0.f,   0.f },
+		{ TEXT("neck_02"),  0.25f, 0.f,   0.f },
+		{ TEXT("head"),     0.30f, 0.f,   0.f },
 	};
 
 	const TCHAR* const Directions[] = {
@@ -215,7 +217,8 @@ void UTSAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	const FRotator AimDelta = (Character->GetBaseAimRotation() - ActorRotation).GetNormalized();
 	AimPitch = FMath::FInterpTo(AimPitch, FMath::Clamp(AimDelta.Pitch, -90.f, 90.f), DeltaSeconds, 15.f);
-	LookYaw = FMath::FInterpTo(LookYaw, FMath::Clamp(AimDelta.Yaw, -TSAnim::LookYawLimit, TSAnim::LookYawLimit), DeltaSeconds, TSAnim::LookInterpSpeed);
+	const float YawLimit = bIsAiming ? TSAnim::LookYawLimit : TSAnim::RelaxedLookYawLimit;
+	LookYaw = FMath::FInterpTo(LookYaw, FMath::Clamp(AimDelta.Yaw, -YawLimit, YawLimit), DeltaSeconds, TSAnim::LookInterpSpeed);
 }
 
 // ---- Proxy: setup -------------------------------------------------------------------------------
@@ -587,16 +590,15 @@ void FTSAnimInstanceProxy::BuildSamples(float DeltaSeconds)
 	// Crouched gait, used for the legs only.
 	if (!Crouch.IsEmpty() && CrouchAlpha > KINDA_SMALL_NUMBER)
 	{
+		// No turn steps while kneeling: the crouched side-step clips swing a leg far out, and a kneeling
+		// soldier pivots on the spot anyway.
 		const float MoveW = Speed > TSAnim::IdleThreshold ? FMath::Clamp(Speed / (CrouchSpeedRef * 0.5f), 0.f, 1.f) : 0.f;
-		float CrouchIdleW = 1.f - MoveW;
-		const float CrouchTurnW = CrouchIdleW * TurnAlpha;
-		CrouchIdleW -= CrouchTurnW;
+		const float CrouchIdleW = 1.f - MoveW;
 
 		if (CrouchIdleW > KINDA_SMALL_NUMBER)
 		{
 			CrouchSamples.Add({ CrouchIdle, CrouchIdleW, LoopTime(CrouchIdle) });
 		}
-		AddTurnStep(CrouchSamples, Crouch, CrouchTurnW);
 		AddDirectional(CrouchSamples, Crouch, MoveW, Phase, CrouchAlpha, CycleSum, CycleWeight);
 		Normalize(CrouchSamples);
 	}
